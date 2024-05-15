@@ -86,8 +86,10 @@ if __name__ == '__main__':
     # Set a MLflow Experiment
     # mlflow.end_run()
     mlflow.set_tracking_uri(uri="http://0.0.0.0:5000")
-    mlflow.set_experiment("MLflow GNN")
-    
+    mlflow.set_experiment("MLflow GNN - presentation prep")
+    run_name = "5 head GAT model, random split"
+    training_info = "Using MolScaling (PyG) GAT with 5 attention heads, random split"
+
     # Set hyperparameters
     dataset_name = 'mdck'
     num_tasks = get_num_task(dataset_name)
@@ -98,6 +100,7 @@ if __name__ == '__main__':
     dropout_ratio = 0.5
     lr = 1e-3
     epochs = 500
+    n_heads = 5
     
     # Log params
     params = {
@@ -108,7 +111,8 @@ if __name__ == '__main__':
         'emb_dim': emb_dim,
         'dropout_ratio': dropout_ratio,
         'lr': lr,
-        'epochs': epochs
+        'epochs': epochs,
+        'n_heads' : n_heads
     }
     
     # Set your dataset directory
@@ -124,8 +128,8 @@ if __name__ == '__main__':
 
     # Initalize model
     model_param_group = []
-    model = GNN(num_layer=num_layer, emb_dim=emb_dim, drop_ratio=dropout_ratio).to(device)
-    output_layer = MLP(in_channels=emb_dim, hidden_channels=emb_dim, 
+    model = GNN(num_layer=num_layer, emb_dim=emb_dim, drop_ratio=dropout_ratio, gnn_type="gat", n_heads=n_heads).to(device)
+    output_layer = MLP(in_channels=emb_dim*n_heads, hidden_channels=emb_dim, 
                         out_channels=num_tasks, num_layers=1, dropout=0).to(device)
 
     model_param_group.append({'params': output_layer.parameters(),'lr': lr})
@@ -141,24 +145,22 @@ if __name__ == '__main__':
     
     # Split data
     if split == 'scaffold':
-        smiles_list = pd.read_csv(dataset_folder + dataset + '/processed/smiles.csv',
+        smiles_list = pd.read_csv(dataset_folder + dataset_name + '/processed/smiles.csv',
                                   header=None)[0].tolist()
-        train_dataset, valid_dataset, test_dataset, (train_smiles, valid_smiles, test_smiles), (_,_,_) = scaffold_split(
-            dataset, smiles_list, null_value=0, frac_train=0.8,frac_valid=0.1, frac_test=0.1, return_smiles=True)
+        train_dataset, valid_dataset, test_dataset, (train_smiles,  valid_smiles, test_smiles), (_,_,_) = scaffold_split(
+            dataset, smiles_list, null_value=0, frac_train=0.8,frac_test=0.2, frac_valid=0, return_smiles=True)
         print('split via scaffold')
     elif split == 'random':
         smiles_list = pd.read_csv(dataset_folder + dataset_name + '/processed/smiles.csv',
                                   header=None)[0].tolist()
         train_dataset, valid_dataset, test_dataset, (train_smiles, valid_smiles, test_smiles),_ = random_split(
-            dataset, null_value=0, frac_train=0.8, frac_valid=0.1,
-            frac_test=0.1, seed=seed, smiles_list=smiles_list)
+            dataset, null_value=0, frac_train=0.8, frac_valid=0,
+    frac_test=0.2, seed=seed, smiles_list=smiles_list)
         print('randomly split')
 
     # Set dataloaders
     train_loader = DataLoader(train_dataset, batch_size=batch_size,
                             shuffle=True, num_workers=8)
-    val_loader = DataLoader(valid_dataset, batch_size=batch_size,
-                            shuffle=False, num_workers=8)
     test_loader = DataLoader(test_dataset, batch_size=batch_size,
                                 shuffle=False, num_workers=8)
 
@@ -168,31 +170,35 @@ if __name__ == '__main__':
 
     # mlflow.end_run()
     with mlflow.start_run():
+
+        mlflow.set_tag("mlflow.runName", run_name)
+        mlflow.set_tag("Training Info", training_info)
         mlflow.log_params(params)
+       
         for epoch in range(1, epochs + 1):
             loss_acc = train_func(model, device, train_loader, optimizer)
             print('Epoch: {}\nLoss: {}'.format(epoch, loss_acc))
 
             train_result, train_target, train_pred = eval_func(model, device, train_loader)
-            
-            val_result, val_target, val_pred = eval_func(model, device, val_loader)
             test_result, test_target, test_pred = eval_func(model, device, test_loader)
-            test_result_list.append(test_result)
-            
+ 
+            test_result_list.append(test_result)           
             train_result_list.append(train_result)
-            val_result_list.append(val_result)
 
             for metric in metric_list:
-                print('{} train: {:.6f}\tval: {:.6f}\ttest: {:.6f}'.format(metric, train_result[metric], val_result[metric], test_result[metric]))
+                print('{} train: {:.6f} \ttest: {:.6f}'.format(metric, train_result[metric], test_result[metric]))
 
-            if val_result['MAE'] < best_val_mae:
-                best_val_mae = val_result['MAE']
-                best_val_idx = epoch - 1
+            if test_result['MAE'] < best_val_mae:
+                best_test_mae = test_result['MAE']
+                best_test_idx = epoch - 1
                 
             # mlflow.log_metric("r2_score", train_result['pearson_R'], step=epoch)
-            mlflow.log_metrics(val_result, step=epoch)
+            mlflow.log_metrics(test_result, step=epoch)
+            mlflow.log_metric('train_MAE', train_result['MAE'], step=epoch)
+            mlflow.log_metric('train_RMSE', train_result['RMSE'], step=epoch)
+            mlflow.log_metric('train_pearson_R', train_result['pearson_R'], step=epoch)
     mlflow.end_run()
 
     for metric in metric_list:
-        print('Best (RMSE), {} train: {:.6f}\tval: {:.6f}\ttest: {:.6f}'.format(
-            metric, train_result_list[best_val_idx][metric], val_result_list[best_val_idx][metric], test_result_list[best_val_idx][metric]))
+        print('Best (RMSE), {} train: {:.6f}\ttest: {:.6f}'.format(
+            metric, train_result_list[best_val_idx][metric], test_result_list[best_val_idx][metric]))

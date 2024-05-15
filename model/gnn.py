@@ -80,7 +80,7 @@ class GNN(nn.Module):
     Output:
         node representations """
 
-    def __init__(self, num_layer, emb_dim, JK="last", drop_ratio=0., gnn_type="gin", deg=None):
+    def __init__(self, num_layer, emb_dim, JK="last", drop_ratio=0., gnn_type="gin", deg=None, n_heads=1):
 
         if num_layer < 2:
             raise ValueError("Number of GNN layers must be greater than 1.")
@@ -89,6 +89,8 @@ class GNN(nn.Module):
         self.drop_ratio = drop_ratio
         self.num_layer = num_layer
         self.JK = JK
+        self.gnn_type = gnn_type
+        self.n_heads = n_heads
 
         self.x_embedding1 = nn.Embedding(num_atom_type, emb_dim)
         self.x_embedding2 = nn.Embedding(num_chirality_tag, emb_dim)
@@ -99,14 +101,14 @@ class GNN(nn.Module):
         ###List of MLPs
         self.gnns = nn.ModuleList()
         for layer in range(num_layer):
-            if gnn_type == "gin":
+            if self.gnn_type == "gin":
                 self.gnns.append(GINConv(emb_dim, aggr = "add")) # default aggregation is 'add'
                 # self.gnns.append(GINEConv(nn=nn.Sequential(nn.Linear(emb_dim,emb_dim)), edge_dim=2)) # default aggregation is 'add'
-            elif gnn_type == "gcn":
-                self.gnns.append(GCNConv(emb_dim))
-            elif gnn_type == "gat":
-                self.gnns.append(GATConv(emb_dim))
-            elif gnn_type == "pna":
+            elif self.gnn_type == "gcn":
+                self.gnns.append(GCNConv(in_channels=-1, out_channels=emb_dim))
+            elif self.gnn_type == "gat":
+                self.gnns.append(GATConv(in_channels=-1, out_channels=emb_dim, heads=self.n_heads))
+            elif self.gnn_type == "pna":
                 aggregators = ['mean', 'min', 'max', 'std']
                 scalers = ['identity', 'amplification', 'attenuation']
                 self.gnns.append(PNAConv(emb_dim, emb_dim, aggregators=aggregators, scalers=scalers, deg=deg, edge_dim=2, towers=5))
@@ -114,7 +116,7 @@ class GNN(nn.Module):
         ###List of batchnorms
         self.batch_norms = nn.ModuleList()
         for layer in range(num_layer):
-            self.batch_norms.append(nn.BatchNorm1d(emb_dim))
+            self.batch_norms.append(nn.BatchNorm1d(emb_dim*self.n_heads))
 
     # def forward(self, x, edge_index, edge_attr):
     def forward(self, *argv):
@@ -125,12 +127,18 @@ class GNN(nn.Module):
             x, edge_index, edge_attr = data.x, data.edge_index, data.edge_attr
         else:
             raise ValueError("unmatched number of arguments.")
+        
+        # ABM addition 5/15/24:
+        edge_attr = edge_attr.float()
 
         x = self.x_embedding1(x[:, 0]) + self.x_embedding2(x[:, 1])
 
         h_list = [x]
         for layer in range(self.num_layer):
-            h = self.gnns[layer](h_list[layer], edge_index, edge_attr)
+            if self.gnn_type == "gcn":
+                h = self.gnns[layer](h_list[layer], edge_index)
+            else:
+                h = self.gnns[layer](h_list[layer], edge_index, edge_attr)
             h = self.batch_norms[layer](h)
 
             if layer == self.num_layer - 1:
