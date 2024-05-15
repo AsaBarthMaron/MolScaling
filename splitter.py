@@ -84,7 +84,7 @@ def scaffold_split(dataset, smiles_list, task_idx=None, null_value=0,
     assert len(set(test_idx).intersection(set(valid_idx))) == 0
 
     train_dataset = dataset[torch.tensor(train_idx)]
-    valid_dataset = dataset[torch.tensor(valid_idx)]
+    valid_dataset = dataset[torch.tensor(valid_idx)] if len(valid_idx) > 0 else None
     test_dataset = dataset[torch.tensor(test_idx)]
 
     if not return_smiles:
@@ -160,7 +160,7 @@ def imbalanced_split(dataset, smiles_list, task_idx=None, null_value=0,
     print("Train ratio: {}".format(len(train_idx)/len(smiles_list)))
 
     train_dataset = dataset[torch.tensor(train_idx)]
-    valid_dataset = dataset[torch.tensor(valid_idx)]
+    valid_dataset = dataset[torch.tensor(valid_idx)] if len(valid_idx) > 0 else None
     test_dataset = dataset[torch.tensor(test_idx)]
     # ===========================================================================
 
@@ -230,7 +230,7 @@ def random_scaffold_split(dataset, smiles_list, task_idx=None, null_value=0,
             train_idx.extend(scaffold_set)
 
     train_dataset = dataset[torch.tensor(train_idx)]
-    valid_dataset = dataset[torch.tensor(valid_idx)]
+    valid_dataset = dataset[torch.tensor(valid_idx)] if len(valid_idx) > 0 else None
     test_dataset = dataset[torch.tensor(test_idx)]
 
     return train_dataset, valid_dataset, test_dataset
@@ -271,7 +271,7 @@ def random_split(dataset, task_idx=None, null_value=0,
     assert len(train_idx) + len(valid_idx) + len(test_idx) == num_mols
 
     train_dataset = dataset[torch.tensor(train_idx)]
-    valid_dataset = dataset[torch.tensor(valid_idx)]
+    valid_dataset = dataset[torch.tensor(valid_idx)] if len(valid_idx) > 0 else None
     test_dataset = dataset[torch.tensor(test_idx)]
 
     if not smiles_list:
