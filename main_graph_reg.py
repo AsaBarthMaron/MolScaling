@@ -87,8 +87,10 @@ if __name__ == '__main__':
     # mlflow.end_run()
     mlflow.set_tracking_uri(uri="http://0.0.0.0:5000")
     mlflow.set_experiment("MLflow GNN - presentation prep")
-    run_name = "5 head GAT model, random split"
-    training_info = "Using MolScaling (PyG) GAT with 5 attention heads, random split"
+    # run_name = "5 head GAT with additional atom features, random split"
+    # training_info = "Added formal charge, numH, hybridization, and degree, random split"
+    run_name = "testing GIN"
+    training_info = ""
 
     # Set hyperparameters
     dataset_name = 'mdck'
@@ -100,7 +102,8 @@ if __name__ == '__main__':
     dropout_ratio = 0.5
     lr = 1e-3
     epochs = 500
-    n_heads = 5
+    n_heads = 1
+    gnn_type = "gin"
     
     # Log params
     params = {
@@ -112,7 +115,8 @@ if __name__ == '__main__':
         'dropout_ratio': dropout_ratio,
         'lr': lr,
         'epochs': epochs,
-        'n_heads' : n_heads
+        'n_heads' : n_heads,
+        'gnn_type': gnn_type
     }
     
     # Set your dataset directory
@@ -128,7 +132,7 @@ if __name__ == '__main__':
 
     # Initalize model
     model_param_group = []
-    model = GNN(num_layer=num_layer, emb_dim=emb_dim, drop_ratio=dropout_ratio, gnn_type="gat", n_heads=n_heads).to(device)
+    model = GNN(num_layer=num_layer, emb_dim=emb_dim, drop_ratio=dropout_ratio, gnn_type=gnn_type, n_heads=n_heads).to(device)
     output_layer = MLP(in_channels=emb_dim*n_heads, hidden_channels=emb_dim, 
                         out_channels=num_tasks, num_layers=1, dropout=0).to(device)
 

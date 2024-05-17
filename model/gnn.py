@@ -129,7 +129,8 @@ class GNN(nn.Module):
             raise ValueError("unmatched number of arguments.")
         
         # ABM addition 5/15/24:
-        edge_attr = edge_attr.float()
+        if self.gnn_type == "gat":
+            edge_attr = edge_attr.float()
 
         x = self.x_embedding1(x[:, 0]) + self.x_embedding2(x[:, 1])
 
