@@ -17,6 +17,8 @@ from datasets.molnet import MoleculeDataset
 from model.gnn import GNN
 from model.mlp import MLP
 
+from model.set_transformer_models import SetTransformer
+
 def seed_all(seed):
     if not seed:
         seed = 0
@@ -40,12 +42,20 @@ def compute_mean_mad(values):
 def train_general(model, device, loader, optimizer):
     model.train()
     output_layer.train()
+    adaptive_readout.train()
     total_loss = 0
 
     for step, batch in enumerate(loader):
         batch = batch.to(device)
         h = global_mean_pool(model(batch), batch.batch)
         pred = output_layer(h)
+
+        nodes = model(batch)
+        pred_list = []
+        for i_graph in range(len(batch)):
+            node_mask = batch.batch.to('cpu') == i_graph
+            pred_list.append(adaptive_readout(nodes[node_mask, :].unsqueeze(0)))
+        pred = torch.cat(pred_list).view([len(batch), 1])
         
         y = batch.y.view(pred.shape).float()
         y = ((y-meann)/mad)
@@ -66,9 +76,15 @@ def eval_general(model, device, loader):
     for step, batch in enumerate(loader):
         batch = batch.to(device)
         with torch.no_grad():
-            h = global_mean_pool(model(batch), batch.batch)
-            pred = output_layer(h)
-    
+            # h = global_mean_pool(model(batch), batch.batch)
+            # pred = output_layer(h)
+            nodes = model(batch)
+            pred_list = []
+            for i_graph in range(len(batch)):
+                node_mask = batch.batch.to('cpu') == i_graph
+                pred_list.append(adaptive_readout(nodes[node_mask, :].unsqueeze(0)))
+            pred = torch.cat(pred_list).view([len(batch), 1])
+
         true = batch.y.view(pred.shape).float()
         y_true.append(true)
         y_pred.append(pred)
@@ -87,9 +103,8 @@ if __name__ == '__main__':
     # mlflow.end_run()
     mlflow.set_tracking_uri(uri="http://0.0.0.0:5000")
     mlflow.set_experiment("MLflow GNN - presentation prep")
-    # run_name = "5 head GAT with additional atom features, random split"
-    # training_info = "Added formal charge, numH, hybridization, and degree, random split"
-    run_name = "testing GIN"
+    # run_name = "8 head GAT explicit edge arg passed, with additional atom features, random split"
+    run_name = "GIN with set transformer readout"
     training_info = ""
 
     # Set hyperparameters
@@ -135,6 +150,7 @@ if __name__ == '__main__':
     model = GNN(num_layer=num_layer, emb_dim=emb_dim, drop_ratio=dropout_ratio, gnn_type=gnn_type, n_heads=n_heads).to(device)
     output_layer = MLP(in_channels=emb_dim*n_heads, hidden_channels=emb_dim, 
                         out_channels=num_tasks, num_layers=1, dropout=0).to(device)
+    adaptive_readout = SetTransformer(dim_input=300, num_outputs=1, dim_output=1).to(device)
 
     model_param_group.append({'params': output_layer.parameters(),'lr': lr})
     model_param_group.append({'params': model.parameters(), 'lr': lr})
@@ -206,3 +222,7 @@ if __name__ == '__main__':
     for metric in metric_list:
         print('Best (RMSE), {} train: {:.6f}\ttest: {:.6f}'.format(
             metric, train_result_list[best_val_idx][metric], test_result_list[best_val_idx][metric]))
+        
+
+
+

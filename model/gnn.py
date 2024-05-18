@@ -15,6 +15,10 @@ import pdb
 
 num_atom_type = 120  # including the extra mask tokens
 num_chirality_tag = 3
+num_formal_charge = 11
+num_hybridization = 6
+num_numH = 9
+num_degree = 11
 
 num_bond_type = 6  # including aromatic and self-loop edge, and extra masked tokens
 num_bond_direction = 3
@@ -62,7 +66,9 @@ class GINConv(MessagePassing):
 
     def message(self, x_j, edge_attr):
         # Different from original concat
+        # return x_j
         return x_j + edge_attr
+        # return torch.cat((x_j, edge_attr), dim=1)
 
     def update(self, aggr_out):
         return self.mlp(aggr_out)
@@ -94,9 +100,17 @@ class GNN(nn.Module):
 
         self.x_embedding1 = nn.Embedding(num_atom_type, emb_dim)
         self.x_embedding2 = nn.Embedding(num_chirality_tag, emb_dim)
+        self.x_embedding3 = nn.Embedding(num_formal_charge, emb_dim)
+        self.x_embedding4 = nn.Embedding(num_hybridization, emb_dim)
+        self.x_embedding5 = nn.Embedding(num_numH, emb_dim)
+        self.x_embedding6 = nn.Embedding(num_degree, emb_dim)
 
         nn.init.xavier_uniform_(self.x_embedding1.weight.data)
         nn.init.xavier_uniform_(self.x_embedding2.weight.data)
+        nn.init.xavier_uniform_(self.x_embedding3.weight.data)
+        nn.init.xavier_uniform_(self.x_embedding4.weight.data)
+        nn.init.xavier_uniform_(self.x_embedding5.weight.data)
+        nn.init.xavier_uniform_(self.x_embedding6.weight.data)
 
         ###List of MLPs
         self.gnns = nn.ModuleList()
@@ -107,7 +121,7 @@ class GNN(nn.Module):
             elif self.gnn_type == "gcn":
                 self.gnns.append(GCNConv(in_channels=-1, out_channels=emb_dim))
             elif self.gnn_type == "gat":
-                self.gnns.append(GATConv(in_channels=-1, out_channels=emb_dim, heads=self.n_heads))
+                self.gnns.append(GATConv(in_channels=-1, out_channels=emb_dim, heads=self.n_heads, edge_dim=2))
             elif self.gnn_type == "pna":
                 aggregators = ['mean', 'min', 'max', 'std']
                 scalers = ['identity', 'amplification', 'attenuation']
@@ -132,8 +146,10 @@ class GNN(nn.Module):
         if self.gnn_type == "gat":
             edge_attr = edge_attr.float()
 
-        x = self.x_embedding1(x[:, 0]) + self.x_embedding2(x[:, 1])
-
+        x = self.x_embedding1(x[:, 0]) + self.x_embedding2(x[:, 1]) \
+            + self.x_embedding3(x[:, 2]) + self.x_embedding4(x[:, 3]) \
+            + self.x_embedding5(x[:, 4]) + self.x_embedding6(x[:, 5]) 
+        
         h_list = [x]
         for layer in range(self.num_layer):
             if self.gnn_type == "gcn":

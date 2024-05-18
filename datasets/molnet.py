@@ -69,16 +69,16 @@ def mol_to_graph_data_obj_simple(mol):
     nBits = 1024
     atom_features_list = []
     for atom in mol.GetAtoms():
-        atom_feature = [allowable_features['possible_atomic_num_list'].index(atom.GetAtomicNum())] + \
-                       [allowable_features['possible_chirality_list'].index(atom.GetChiralTag())]
-        # atom_feature = [
-        #     allowable_features['possible_atomic_num_list'].index(atom.GetAtomicNum()),
-        #     allowable_features['possible_formal_charge_list'].index(atom.GetFormalCharge()),
-        #     allowable_features['possible_chirality_list'].index(atom.GetChiralTag()),
-        #     allowable_features['possible_hybridization_list'].index(atom.GetHybridization()),
-        #     allowable_features['possible_numH_list'].index(atom.GetTotalNumHs()),
-        #     allowable_features['possible_degree_list'].index(atom.GetDegree())
-        # ]
+        # atom_feature = [allowable_features['possible_atomic_num_list'].index(atom.GetAtomicNum())] + \
+        #                [allowable_features['possible_chirality_list'].index(atom.GetChiralTag())]
+        atom_feature = [
+            allowable_features['possible_atomic_num_list'].index(atom.GetAtomicNum()),
+            allowable_features['possible_chirality_list'].index(atom.GetChiralTag()),
+            allowable_features['possible_formal_charge_list'].index(atom.GetFormalCharge()),
+            allowable_features['possible_hybridization_list'].index(atom.GetHybridization()),
+            allowable_features['possible_numH_list'].index(atom.GetTotalNumHs()),
+            allowable_features['possible_degree_list'].index(atom.GetDegree())
+        ]
         atom_features_list.append(atom_feature)
     x = torch.tensor(np.array(atom_features_list), dtype=torch.long)
 
